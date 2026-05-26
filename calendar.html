@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="달력">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>달력</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#ffffff;--surface:#f5f5f7;--text:#1c1c1e;--sub:#8e8e93;
+    --border:#e5e5ea;--red:#ff3b30;--blue:#007aff;--green:#34c759;
+    --orange:#ff9500;--purple:#5856d6;--substitute:#ff6b35;
+  }
+  @media(prefers-color-scheme:dark){
+    :root{--bg:#000000;--surface:#1c1c1e;--text:#ffffff;--sub:#636366;--border:#2c2c2e;}
+    body{background:#000;}
+  }
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,'Helvetica Neue',sans-serif;
+    display:flex;flex-direction:column;
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .header{
+    padding:16px 18px 6px;
+    background:var(--bg);
+    border-bottom:0.5px solid var(--border);
+    flex-shrink:0;
+  }
+  .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+  .month-name{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.5px;}
+  .year-num{font-size:20px;font-weight:300;color:var(--sub);margin-left:6px;}
+  .header-right{display:flex;gap:6px;align-items:center;}
+  .today-btn{
+    padding:6px 14px;border-radius:20px;
+    border:0.5px solid var(--border);background:transparent;
+    color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .gcal-badge{
+    display:flex;align-items:center;gap:4px;
+    padding:4px 10px;
+    background:rgba(52,199,89,0.12);
+    border:0.5px solid rgba(52,199,89,0.3);
+    border-radius:20px;font-size:11px;font-weight:600;color:var(--green);
+    cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .gcal-badge.syncing{opacity:0.6;}
+  .nav-btn{
+    width:32px;height:32px;border-radius:50%;border:none;
+    background:var(--surface);color:var(--blue);font-size:17px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .nav-btn:active{background:var(--border);}
+  .weekdays{display:grid;grid-template-columns:repeat(7,1fr);margin-top:10px;}
+  .wd{text-align:center;font-size:11px;font-weight:600;color:var(--sub);padding:3px 0;}
+  .wd.sun{color:var(--red);}.wd.sat{color:var(--blue);}
+  .cal-scroll{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+  .weeks-grid{flex:1;display:flex;flex-direction:column;}
+  .week-row{
+    flex:1;display:grid;grid-template-columns:repeat(7,1fr);
+    border-bottom:0.5px solid var(--border);
+  }
+  .week-row:last-child{border-bottom:none;}
+  .day-cell{
+    padding:5px 4px 3px;
+    border-right:0.5px solid var(--border);
+    cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;
+    -webkit-tap-highlight-color:transparent;
+    transition:background 0.1s;
+  }
+  .day-cell:last-child{border-right:none;}
+  .day-cell:active{background:var(--surface);}
+  .day-num{
+    width:26px;height:26px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:400;color:var(--text);
+    flex-shrink:0;margin-bottom:2px;
+  }
+  .day-cell.other .day-num{opacity:0.28;}
+  .day-cell.sunday .day-num{color:var(--red);}
+  .day-cell.saturday .day-num{color:var(--blue);}
+  .day-cell.holiday:not(.sunday):not(.saturday) .day-num{color:var(--red);}
+  .day-cell.substitute-day:not(.sunday):not(.saturday) .day-num{color:var(--substitute);}
+  .day-cell.temp-day:not(.sunday):not(.saturday) .day-num{color:var(--purple);}
+  .day-cell.today .day-num{background:var(--red);color:#fff !important;font-weight:700;}
+  .day-cell.selected:not(.today) .day-num{background:rgba(0,122,255,0.13);color:var(--blue) !important;font-weight:600;}
+  .hol-label{font-size:9px;font-weight:500;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .hol-label.public{color:var(--red);}
+  .hol-label.substitute{color:var(--substitute);}
+  .hol-label.temp{color:var(--purple);}
+  .ev-chip{
+    width:100%;font-size:9px;font-weight:500;color:#fff;
+    border-radius:3px;padding:1px 3px;margin-bottom:1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .more-chip{font-size:9px;color:var(--sub);padding-left:2px;}
+  .bottom-panel{
+    background:var(--surface);
+    border-top:0.5px solid var(--border);
+    padding:14px 16px 20px;
+    flex-shrink:0;
+    min-height:160px;
+    max-height:220px;
+    overflow-y:auto;
+  }
+  .panel-date{font-size:12px;font-weight:600;color:var(--sub);margin-bottom:10px;}
+  .hol-banner{
+    border-radius:10px;padding:8px 12px;margin-bottom:8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .hol-banner.public{background:rgba(255,59,48,0.08);border:0.5px solid rgba(255,59,48,0.2);}
+  .hol-banner.substitute{background:rgba(255,107,53,0.08);border:0.5px solid rgba(255,107,53,0.25);}
+  .hol-banner.temp{background:rgba(88,86,214,0.08);border:0.5px solid rgba(88,86,214,0.2);}
+  .hol-icon{font-size:16px;}
+  .hol-name-big{font-size:14px;font-weight:600;}
+  .hol-name-big.public{color:var(--red);}
+  .hol-name-big.substitute{color:var(--substitute);}
+  .hol-name-big.temp{color:var(--purple);}
+  .hol-type-badge{font-size:10px;color:var(--sub);margin-left:auto;white-space:nowrap;}
+  .event-row{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 12px;background:var(--bg);
+    border-radius:10px;margin-bottom:7px;
+    border:0.5px solid var(--border);
+  }
+  .ev-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .ev-title{flex:1;font-size:14px;font-weight:500;color:var(--text);}
+  .ev-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+  .ev-time{font-size:11px;color:var(--sub);}
+  .ev-gcal{font-size:10px;font-weight:600;color:var(--green);}
+  .no-event{text-align:center;padding:18px 0 8px;color:var(--sub);font-size:14px;}
+  .action-row{display:flex;gap:8px;margin-top:8px;}
+  .add-btn{
+    flex:1;padding:11px;background:var(--blue);color:#fff;
+    border:none;border-radius:12px;font-size:14px;font-weight:600;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  .add-btn:active{opacity:0.85;}
+  .sync-btn{
+    padding:11px 16px;background:var(--surface);color:var(--blue);
+    border:0.5px solid var(--border);border-radius:12px;
+    font-size:14px;font-weight:600;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sync-btn:active{background:var(--border);}
+  .toast{
+    position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,0.75);color:#fff;
+    padding:8px 18px;border-radius:20px;font-size:13px;
+    opacity:0;transition:opacity 0.3s;pointer-events:none;
+    white-space:nowrap;z-index:999;
+  }
+  .toast.show{opacity:1;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .spin{animation:spin 0.8s linear infinite;display:inline-block;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div>
+      <span class="month-name" id="mName">5월</span>
+      <span class="year-num" id="yNum">2026</span>
+    </div>
+    <div class="header-right">
+      <div class="gcal-badge" id="gcalBadge" onclick="syncNow()">
+        <span id="gcalIcon">●</span>
+        <span id="gcalLabel">Google 연동</span>
+      </div>
+      <button class="today-btn" onclick="goToday()">오늘</button>
+      <button class="nav-btn" onclick="changeMonth(-1)">‹</button>
+      <button class="nav-btn" onclick="changeMonth(1)">›</button>
+    </div>
+  </div>
+  <div class="weekdays">
+    <div class="wd sun">일</div><div class="wd">월</div><div class="wd">화</div>
+    <div class="wd">수</div><div class="wd">목</div><div class="wd">금</div>
+    <div class="wd sat">토</div>
+  </div>
+</div>
+
+<div class="cal-scroll">
+  <div class="weeks-grid" id="weeksGrid"></div>
+  <div class="bottom-panel">
+    <div class="panel-date" id="panelDate"></div>
+    <div id="panelEvents"></div>
+    <div class="action-row">
+      <button class="add-btn" id="addBtn" onclick="addEvent()">+ 일정 추가</button>
+      <button class="sync-btn" onclick="syncNow()">↻ 동기화</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const MONTHS=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+const WDAYS=['일','월','화','수','목','금','토'];
+const today=new Date();
+let viewY=today.getFullYear(),viewM=today.getMonth();
+let selY=viewY,selM=viewM,selD=today.getDate();
+
+const HOLIDAYS={
+  // 2025
+  '2025-1-1':{name:'신정',type:'public'},
+  '2025-1-28':{name:'설날 연휴',type:'public'},
+  '2025-1-29':{name:'설날',type:'public'},
+  '2025-1-30':{name:'설날 연휴',type:'public'},
+  '2025-3-1':{name:'삼일절',type:'public'},
+  '2025-5-1':{name:'노동절',type:'public'},
+  '2025-5-5':{name:'어린이날',type:'public'},
+  '2025-5-6':{name:'어린이날 대체',type:'substitute'},
+  '2025-5-12':{name:'부처님오신날',type:'public'},
+  '2025-6-6':{name:'현충일',type:'public'},
+  '2025-8-15':{name:'광복절',type:'public'},
+  '2025-10-3':{name:'개천절',type:'public'},
+  '2025-10-5':{name:'추석 연휴',type:'public'},
+  '2025-10-6':{name:'추석',type:'public'},
+  '2025-10-7':{name:'추석 연휴',type:'public'},
+  '2025-10-9':{name:'한글날',type:'public'},
+  '2025-12-25':{name:'성탄절',type:'public'},
+  // 2026
+  '2026-1-1':{name:'신정',type:'public'},
+  '2026-2-16':{name:'설날 연휴',type:'public'},
+  '2026-2-17':{name:'설날',type:'public'},
+  '2026-2-18':{name:'설날 연휴',type:'public'},
+  '2026-3-1':{name:'삼일절',type:'public'},
+  '2026-3-2':{name:'삼일절 대체',type:'substitute'},
+  '2026-5-1':{name:'노동절',type:'public'},
+  '2026-5-5':{name:'어린이날',type:'public'},
+  '2026-5-24':{name:'부처님오신날',type:'public'},
+  '2026-5-25':{name:'부처님오신날 대체',type:'substitute'},
+  '2026-6-3':{name:'지방선거',type:'temp'},
+  '2026-6-6':{name:'현충일',type:'public'},
+  '2026-7-17':{name:'제헌절',type:'public'},
+  '2026-8-15':{name:'광복절',type:'public'},
+  '2026-8-17':{name:'광복절 대체',type:'substitute'},
+  '2026-9-24':{name:'추석 연휴',type:'public'},
+  '2026-9-25':{name:'추석',type:'public'},
+  '2026-9-26':{name:'추석 연휴',type:'public'},
+  '2026-10-3':{name:'개천절',type:'public'},
+  '2026-10-5':{name:'개천절 대체',type:'substitute'},
+  '2026-10-9':{name:'한글날',type:'public'},
+  '2026-12-25':{name:'성탄절',type:'public'},
+};
+
+let gcalEvents={};
+let isSyncing=false;
+
+function hkey(y,m,d){return `${y}-${m+1}-${d}`;}
+function getHoliday(y,m,d){return HOLIDAYS[hkey(y,m,d)]||null;}
+
+function showToast(msg,dur=2000){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+async function fetchGCalEvents(y,m){
+  if(isSyncing)return;
+  isSyncing=true;
+  const badge=document.getElementById('gcalBadge');
+  const icon=document.getElementById('gcalIcon');
+  const label=document.getElementById('gcalLabel');
+  badge.classList.add('syncing');
+  icon.classList.add('spin');
+  label.textContent='동기화 중...';
+
+  const start=new Date(y,m,1).toISOString();
+  const end=new Date(y,m+1,0,23,59,59).toISOString();
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:2000,
+        system:'You fetch Google Calendar events and return ONLY a valid JSON array. No markdown, no explanation, no extra text. Each item: {title:string, date:"YYYY-M-D", time:"HH:MM" or "종일", color:"#hex"}. If no events, return [].',
+        messages:[{role:'user',content:`Fetch all Google Calendar events for ${y}년 ${m+1}월 using list_events with calendar_id="primary", time_min="${start}", time_max="${end}". Return JSON array only.`}],
+        mcp_servers:[{type:'url',url:'https://calendarmcp.googleapis.com/mcp/v1',name:'gcal'}]
+      })
+    });
+    const data=await res.json();
+    const text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    const clean=text.replace(/```json|```/g,'').trim();
+    const arr=JSON.parse(clean.startsWith('[')?clean:'[]');
+    const map={};
+    arr.forEach(ev=>{
+      if(!map[ev.date])map[ev.date]=[];
+      map[ev.date].push({title:ev.title,time:ev.time||'종일',color:ev.color||'#4285f4',fromGcal:true});
+    });
+    gcalEvents=map;
+    showToast(`${arr.length}개 일정 불러왔어요`);
+  }catch(e){
+    showToast('동기화 실패. 다시 시도해주세요.');
+  }
+  icon.classList.remove('spin');
+  icon.textContent='●';
+  label.textContent='Google 연동';
+  badge.classList.remove('syncing');
+  isSyncing=false;
+  render();
+}
+
+function getEvents(y,m,d){return gcalEvents[hkey(y,m,d)]||[];}
+
+function render(){
+  document.getElementById('mName').textContent=MONTHS[viewM];
+  document.getElementById('yNum').textContent=viewY;
+  const first=new Date(viewY,viewM,1).getDay();
+  const dim=new Date(viewY,viewM+1,0).getDate();
+  const prev=new Date(viewY,viewM,0).getDate();
+  const total=Math.ceil((first+dim)/7)*7;
+  const grid=document.getElementById('weeksGrid');
+  grid.innerHTML='';
+
+  let cells=[];
+  for(let i=first-1;i>=0;i--) cells.push({d:prev-i,mo:viewM-1,yo:viewM===0?viewY-1:viewY,other:true});
+  for(let d=1;d<=dim;d++) cells.push({d,mo:viewM,yo:viewY,other:false});
+  let nd=1;
+  while(cells.length<total) cells.push({d:nd++,mo:viewM+1,yo:viewM===11?viewY+1:viewY,other:true});
+
+  for(let w=0;w<cells.length;w+=7){
+    const row=document.createElement('div');
+    row.className='week-row';
+    for(let i=0;i<7;i++){
+      const c=cells[w+i];
+      const ry=c.mo<0?c.yo-1:(c.mo>11?c.yo+1:c.yo);
+      const rm=((c.mo%12)+12)%12;
+      const isToday=c.d===today.getDate()&&rm===today.getMonth()&&ry===today.getFullYear();
+      const isSel=c.d===selD&&rm===selM&&ry===selY;
+      const hol=!c.other?getHoliday(ry,rm,c.d):null;
+      const evs=!c.other?getEvents(ry,rm,c.d):[];
+
+      let cls='day-cell';
+      if(c.other) cls+=' other';
+      if(i===0) cls+=' sunday';
+      if(i===6) cls+=' saturday';
+      if(isToday) cls+=' today';
+      if(isSel&&!isToday) cls+=' selected';
+      if(hol){
+        if(hol.type==='public') cls+=' holiday';
+        else if(hol.type==='substitute') cls+=' substitute-day';
+        else if(hol.type==='temp') cls+=' temp-day';
+      }
+
+      const cell=document.createElement('div');
+      cell.className=cls;
+
+      const numEl=document.createElement('div');
+      numEl.className='day-num';
+      numEl.textContent=c.d;
+      cell.appendChild(numEl);
+
+      if(hol&&!c.other){
+        const hl=document.createElement('div');
+        hl.className=`hol-label ${hol.type}`;
+        hl.textContent=hol.name;
+        cell.appendChild(hl);
+      }
+
+      const maxChips=hol?1:2;
+      evs.slice(0,maxChips).forEach(ev=>{
+        const chip=document.createElement('div');
+        chip.className='ev-chip';
+        chip.style.background=ev.color;
+        chip.textContent=ev.title;
+        cell.appendChild(chip);
+      });
+      if(evs.length>maxChips){
+        const more=document.createElement('div');
+        more.className='more-chip';
+        more.textContent=`+${evs.length-maxChips}`;
+        cell.appendChild(more);
+      }
+
+      cell.onclick=(()=>{
+        const _d=c.d,_m=rm,_y=ry;
+        return ()=>{selD=_d;selM=_m;selY=_y;render();renderPanel();};
+      })();
+      row.appendChild(cell);
+    }
+    grid.appendChild(row);
+  }
+  renderPanel();
+}
+
+function renderPanel(){
+  const wdLabel=WDAYS[new Date(selY,selM,selD).getDay()];
+  const isToday=selD===today.getDate()&&selM===today.getMonth()&&selY===today.getFullYear();
+  document.getElementById('panelDate').textContent=
+    (isToday?'오늘 · ':'')+`${selM+1}월 ${selD}일 ${wdLabel}요일`;
+
+  const panel=document.getElementById('panelEvents');
+  panel.innerHTML='';
+  const hol=getHoliday(selY,selM,selD);
+
+  if(hol){
+    const typeLabel={public:'법정공휴일',substitute:'대체공휴일',temp:'임시공휴일'}[hol.type];
+    const banner=document.createElement('div');
+    banner.className=`hol-banner ${hol.type}`;
+    banner.innerHTML=`<span class="hol-name-big ${hol.type}">${hol.name}</span><span class="hol-type-badge">${typeLabel}</span>`;
+    panel.appendChild(banner);
+  }
+
+  const evs=getEvents(selY,selM,selD);
+  if(!evs.length&&!hol){
+    panel.innerHTML='<div class="no-event">일정 없음</div>';
+    return;
+  }
+  evs.forEach(ev=>{
+    const row=document.createElement('div');
+    row.className='event-row';
+    row.innerHTML=`
+      <div class="ev-dot" style="background:${ev.color}"></div>
+      <div class="ev-title">${ev.title}</div>
+      <div class="ev-right">
+        <span class="ev-time">${ev.time}</span>
+        ${ev.fromGcal?'<span class="ev-gcal">Google</span>':''}
+      </div>`;
+    panel.appendChild(row);
+  });
+}
+
+function changeMonth(dir){
+  viewM+=dir;
+  if(viewM<0){viewM=11;viewY--;}
+  if(viewM>11){viewM=0;viewY++;}
+  fetchGCalEvents(viewY,viewM);
+}
+function goToday(){
+  viewY=today.getFullYear();viewM=today.getMonth();
+  selY=viewY;selM=viewM;selD=today.getDate();
+  fetchGCalEvents(viewY,viewM);
+}
+function syncNow(){fetchGCalEvents(viewY,viewM);}
+function addEvent(){
+  const dateStr=`${selY}-${String(selM+1).padStart(2,'0')}-${String(selD).padStart(2,'0')}`;
+  window.open(`https://calendar.google.com/calendar/r/eventedit?dates=${dateStr.replace(/-/g,'')}/${dateStr.replace(/-/g,'')}`, '_blank');
+}
+
+// 스와이프로 월 이동
+let touchStartX=0;
+document.querySelector('.cal-scroll').addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;},{passive:true});
+document.querySelector('.cal-scroll').addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  if(Math.abs(dx)>60){changeMonth(dx<0?1:-1);}
+},{passive:true});
+
+fetchGCalEvents(viewY,viewM);
+</script>
+</body>
+</html>
